@@ -1,0 +1,47 @@
+{
+  "name": "@looker/sdk-codegen",
+  "version": "21.8.0",
+  "description": "Looker SDK Codegen core",
+  "main": "lib/index.js",
+  "module": "lib/esm/index.js",
+  "sideEffects": false,
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "author": "Looker",
+  "license": "MIT",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/looker-open-source/sdk-codegen.git",
+    "directory": "packages/sdk-codegen"
+  },
+  "bugs": {
+    "url": "https://github.com/looker-open-source/sdk-codegen/issues"
+  },
+  "homepage": "https://github.com/looker-open-source/sdk-codegen/tree/main/packages/sdk-codegen",
+  "keywords": [
+    "Looker",
+    "SDK",
+    "codegen"
+  ],
+  "scripts": {
+    "docs": "typedoc --mode file --out docs",
+    "watch:cjs": "yarn lerna exec --scope @looker/sdk-codegen --stream 'BABEL_ENV=build_cjs babel src --root-mode upward --out-dir lib --source-maps --extensions .ts,.tsx --no-comments --watch'",
+    "watch": "yarn lerna exec --scope @looker/sdk-codegen --stream 'BABEL_ENV=build babel src --root-mode upward --out-dir lib --source-maps --extensions .ts,.tsx --no-comments --watch'"
+  },
+  "dependencies": {
+    "@looker/sdk-codegen-utils": "^21.0.11",
+    "@looker/sdk-rtl": "^21.6.0",
+    "blueimp-md5": "^2.13.0",
+    "openapi3-ts": "^1.3.0"
+  },
+  "gitHead": "308cb8c61290837e71345a5ef6fb17be9285990e",
+  "devDependencies": {
+    "lodash": "^4.17.20"
+  }
+}

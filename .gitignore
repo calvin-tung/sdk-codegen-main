@@ -1,0 +1,82 @@
+# local credentials
+.npmrc
+looker.ini
+
+# dependencies
+node_modules
+
+# typescript incrementals
+*.tsbuildinfo
+
+# testing
+/coverage
+.cache
+.eslintcache
+python/.tox/
+
+# code-gen
+./public
+
+# lerna
+/packages/*/lib
+/packages/*/dist
+
+# misc
+.DS_Store
+.env
+.env.*
+.idea/
+.direnv/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/lerna-debug.log
+
+looker.ini.*
+lookerapi*.json
+Looker*.json
+
+# ide configurations
+**/.idea/*
+**/.vscode/*
+
+# code generator unversioned files
+api/*
+python/venv/*
+venv/*
+package-lock.json
+**/lib/*
+**/dist/*
+**/.DS_Store
+**/.build
+**/xcuserdata/
+kotlin/.gradle/*
+**/.gradle/*
+kotlin/.*
+kotlin/bin/*
+kotlin/build/*
+kotlin/out/*
+spec/versions.json
+
+# test output
+junit.xml
+results/*
+
+# csharp
+csharp/*.cache
+**/obj/
+**/bin/Debug
+*.user
+
+# hackathon
+**/google-creds.json
+
+# apix indexes
+declarationsIndex.json
+/apix-files/yarn.lock
+
+# hackathon test files
+/hack*.json
+

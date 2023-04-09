@@ -1,0 +1,185 @@
+# The jobs in this workflow are necessary because they are configured as
+# required checks on PRs. Github does not currently support configuring required
+# checks per workflow. A PR that only triggers codegen-ci.yml jobs will only
+# report back with the "Codegen Tests" check. But because there is only a global
+# option for required PR checks, that PR would otherwise never satisfy the
+# "Typescript/Python/APIX Tests" checks without these noop jobs.
+#
+# References:
+# https://github.community/t/github-actions-and-required-checks-in-a-monorepo-using-paths-to-limit-execution/16586
+# https://github.community/t/feature-request-conditional-required-checks/16761/6
+#
+# Each job actually has a corresponding "real" job
+# definition in a different workflow file:
+#
+# codegen-ci.yml: Codegen Tests
+# tssdk-ci.yml: Typescript SDK Tests
+# python-ci.yml: Python SDK Tests
+# apix-ci.yml: APIX Tests
+# go-ci.yml: Go SDK Tests
+#
+
+name: Required Checks Hack
+on:
+  pull_request:
+
+  push:
+    branches:
+      - main
+
+permissions:
+  checks: write
+
+jobs:
+  satisfy-required-checks:
+    name: Satisfy Required Checks
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo Checkout
+        uses: actions/checkout@v3
+
+      - uses: tony84727/changed-file-filter@v0.2.2
+        id: filter
+        with:
+          filters: |
+            apix:
+              - packages/code-editor/**/*
+              - packages/run-it/**/*
+              - packages/api-explorer/**/*
+              - packages/extension-api-explorer/**/*
+              - packages/extension-utils/**/*
+              - .github/workflows/apix-ci.yml
+            codegen:
+              - packages/sdk-codegen/**/*
+              - packages/sdk-codegen-utils/**/*
+              - packages/sdk-codegen-scripts/**/*
+              - .github/workflows/codegen-ci.yml
+            hackathon:
+              - packages/wholly-sheet/**/*
+              - packages/hackathon/**/*
+              - .github/workflows/hackathon-ci.yml
+            python:
+              - python/**/*
+              - .github/workflows/python-ci.yml
+            resources:
+              - bin/looker-resources-index/**/*
+              - docs/resources/**/*
+              - .github/workflows/resources-ci.yml
+            tssdk:
+              - packages/sdk/**/*
+              - packages/sdk-rtl/**/*
+              - packages/sdk-node/**/*
+              - packages/extension-sdk/**/*
+              - packages/extension-sdk-react/**/*
+              - packages/extension-utils/**/*
+              - .github/workflows/tssdk-ci.yml
+            gosdk:
+              - packages/go/**/*
+              - .github/workflows/go-ci.yml
+
+      - name: Debug info
+        run: |
+          echo "${{ toJSON(steps.filter.outputs) }}"
+          echo "apix: ${{ steps.filter.outputs.apix }}"
+          echo "codegen: ${{ steps.filter.outputs.codegen }}"
+          echo "hackathon: ${{ steps.filter.outputs.hackathon }}"
+          echo "python: ${{ steps.filter.outputs.python }}"
+          echo "resources: ${{ steps.filter.outputs.resources }}"
+          echo "tssdk: ${{ steps.filter.outputs.tssdk }}"
+          echo "gosdk: ${{ steps.filter.outputs.gosdk }}"
+
+      - name: Create Codegen check
+        if: steps.filter.outputs.codegen == 'false'
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/looker-open-source/sdk-codegen/check-runs \
+          --header "authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          --header "content-type: application/json" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data '{
+            "name": "Codegen Tests",
+            "head_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+            "output": {
+              "title": "Required Checks Hack / Codegen Tests",
+              "summary": "Associated files have not been changed so this can be skipped"
+              },
+            "conclusion": "success"
+          }' \
+          --fail
+
+      - name: Create Typescript check
+        if: steps.filter.outputs.tssdk == 'false'
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/looker-open-source/sdk-codegen/check-runs \
+          --header "authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          --header "content-type: application/json" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data '{
+            "name": "Typescript Tests",
+            "head_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+            "output": {
+              "title": "Required Checks Hack / Typescript Tests",
+              "summary": "Associated files have not been changed so this can be skipped"
+              },
+            "conclusion": "success"
+          }' \
+          --fail
+
+      - name: Create Python check
+        if: steps.filter.outputs.python == 'false'
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/looker-open-source/sdk-codegen/check-runs \
+          --header "authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          --header "content-type: application/json" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data '{
+            "name": "Python Tests",
+            "head_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+            "output": {
+              "title": "Required Checks Hack / Python Tests",
+              "summary": "Associated files have not been changed so this can be skipped"
+              },
+            "conclusion": "success"
+          }' \
+          --fail
+
+      - name: Create APIX check
+        if: steps.filter.outputs.apix == 'false'
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/looker-open-source/sdk-codegen/check-runs \
+          --header "authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          --header "content-type: application/json" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data '{
+            "name": "APIX Tests",
+            "head_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+            "output": {
+              "title": "Required Checks Hack / APIX Tests",
+              "summary": "Associated files have not been changed so this can be skipped"
+              },
+            "conclusion": "success"
+          }' \
+          --fail
+
+      - name: Create Go check
+        if: steps.filter.outputs.gosdk == 'false'
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/looker-open-source/sdk-codegen/check-runs \
+          --header "authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          --header "content-type: application/json" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data '{
+            "name": "Go Tests",
+            "head_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+            "output": {
+              "title": "Required Checks Hack / Go Tests",
+              "summary": "Associated files have not been changed so this can be skipped"
+              },
+            "conclusion": "success"
+          }' \
+          --fail

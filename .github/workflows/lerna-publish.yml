@@ -1,0 +1,89 @@
+name: Publish NPM Packages
+
+on:
+  release:
+    types: published
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'commit/tag/branch to release from'
+        required: true
+
+jobs:
+  setup:
+    uses: looker-open-source/reusable-actions/.github/workflows/primary-version.yml@main
+
+  publish:
+    needs: setup
+    if: >
+      (github.event.inputs) ||
+      (startsWith(github.event.release.tag_name, 'sdk-codegen-all') &&
+      !github.event.release.draft &&
+      !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    env:
+      LOOKERSDK_BASE_URL: https://localhost:20000
+      LOOKERSDK_VERIFY_SSL: false
+      LOOKERSDK_CLIENT_ID: ${{ secrets.LOOKERSDK_CLIENT_ID }}
+      LOOKERSDK_CLIENT_SECRET: ${{ secrets.LOOKERSDK_CLIENT_SECRET }}
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{  github.event.release.tag_name || github.event.inputs.ref }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1.0.0
+        with:
+          credentials_json: ${{ secrets.GCP_AR_READER_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1.1.0
+
+      - name: Authenticate Artifact Repository
+        run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      - name: Pull and run Looker docker image
+        run: |
+          docker pull --quiet us-west1-docker.pkg.dev/cloud-looker-sdk-codegen-cicd/looker/${{ fromJson(needs.setup.outputs.matrix_json)[0] }}
+          docker run --name looker-sdk-codegen-ci -d -p 10000:9999 -p 20000:19999 us-west1-docker.pkg.dev/cloud-looker-sdk-codegen-cicd/looker/${{ fromJson(needs.setup.outputs.matrix_json)[0] }}
+          docker logs -f looker-sdk-codegen-ci --until=30s &
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          registry-url: https://wombat-dressing-room.appspot.com
+
+      - name: Install dependencies and build
+        run: |
+          yarn
+          yarn build
+          yarn dedupe:ci
+
+      # setup test env so prepublishOnly lifecycle script can run
+      - name: Mock looker.ini
+        run: |
+          echo "[Looker]" > looker.ini
+          echo "base_url=https://self-signed.looker.com:19999" >> looker.ini
+          echo "client_id=id" >> looker.ini
+          echo "client_secret=secret" >> looker.ini
+          echo "verify_ssl=False" >> looker.ini
+          echo "timeout=31" >> looker.ini
+          echo "[Looker31]" >> looker.ini
+          echo "base_url=https://self-signed.looker.com:19999" >> looker.ini
+          echo "verify_ssl=False" >> looker.ini
+          echo "timeout=30" >> looker.ini
+
+      - name: Check that Looker is ready
+        run: |
+          ${{ github.workspace }}/.github/scripts/wait_for_looker.sh
+
+      - name: Publish to NPM registry
+        run: $(npm bin)/lerna publish from-package --yes --no-verify-access
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN_RELEASE_BACKED }}

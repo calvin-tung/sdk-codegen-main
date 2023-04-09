@@ -1,0 +1,55 @@
+{
+  "plugins": [{
+    "type": "node-workspace",
+    "merge": false
+  },{
+    "type":"linked-versions",
+    "group-name": "calendar versioned sdks",
+    "components": [
+      "extension-sdk",
+      "extension-sdk-react",
+      "sdk",
+      "sdk-node",
+      "looker_sdk"
+    ]
+  }],
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "packages": {
+    ".": {},
+    "packages/api-explorer": {},
+    "packages/code-editor": {},
+    "packages/extension-api-explorer": {},
+    "packages/extension-playground": {},
+    "packages/extension-sdk": {
+      "component": "extension-sdk",
+      "versioning": "always-bump-patch"
+    },
+    "packages/extension-sdk-react": {
+      "component": "extension-sdk-react",
+      "versioning": "always-bump-patch"
+    },
+    "packages/extension-utils": {},
+    "packages/hackathon": {},
+    "packages/run-it": {},
+    "packages/sdk": {
+      "component": "sdk",
+      "versioning": "always-bump-patch"
+    },
+    "packages/sdk-codegen": {},
+    "packages/sdk-codegen-scripts": {},
+    "packages/sdk-codegen-utils": {},
+    "packages/sdk-node": {
+      "component": "sdk-node",
+      "versioning": "always-bump-patch"
+    },
+    "packages/sdk-rtl": {},
+    "packages/wholly-artifact": {},
+    "packages/wholly-sheet": {},
+    "python": {
+      "component": "looker_sdk",
+      "versioning": "always-bump-patch",
+      "release-type": "python"
+    }
+  }
+}

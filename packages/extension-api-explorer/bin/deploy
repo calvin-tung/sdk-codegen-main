@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+# keep track of the last executed command
+trap 'last_command=$current_command; current_command=$BASH_COMMAND' DEBUG
+# echo an error message before exiting
+trap 'echo "\"${last_command}\" command filed with exit code $?."' EXIT
+
+if [ $# -eq 0 ]
+then
+  echo "Error: A commit message is required." && exit 1
+else
+  commit_msg="$@"
+fi
+
+SRC=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+cd "${SRC}"/../../..
+ROOT=$(pwd)
+
+echo "Installing all package dependencies"
+yarn
+echo "Rebuilding all packages"
+yarn build
+
+cd "${ROOT}"/packages/extension-api-explorer
+echo "Removing existing bundle"
+rm -rf dist/
+echo "Creating extension-api-explorer production bundle"
+yarn bundle
+BUNDLE=$(pwd)"/dist/bundle.js"
+
+cd "${ROOT}"/..
+if [ -d "extension-api-explorer" ]
+then
+  cd extension-api-explorer && git branch --set-upstream-to=origin/main && git pull || exit 1
+else
+  echo "extension-api-explorer clone not found, cloning."
+  git clone git@github.com:looker-open-source/extension-api-explorer.git || exit 1
+  cd extension-api-explorer
+fi
+
+echo "Copying extension bundle into repo"
+git checkout main || { echo "Error checking out branch"; exit 1; }
+cp "${BUNDLE}" .
+echo "Pushing changes to remote"
+git add bundle.js && git commit -m "${commit_msg}" && git push || { exit 1; }
+echo "The extension's bundle commit hash is:"
+git rev-parse HEAD

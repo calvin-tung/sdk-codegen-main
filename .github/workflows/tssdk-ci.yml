@@ -1,0 +1,200 @@
+name: TypeScript SDK CI
+on:
+  pull_request:
+    paths:
+      - packages/sdk/**
+      - packages/sdk-rtl/**
+      - packages/sdk-node/**
+      - packages/extension-sdk/**
+      - packages/extension-sdk-react/**
+      - packages/extension-utils/**
+      - .github/workflows/tssdk-ci.yml
+
+  push:
+    branches:
+      - main
+    paths:
+      - packages/sdk/**
+      - packages/sdk-rtl/**
+      - packages/sdk-node/**
+      - packages/extension-sdk/**
+      - packages/extension-sdk-react/**
+      - packages/extension-utils/**
+      - .github/workflows/tssdk-ci.yml
+
+  workflow_dispatch:
+
+env:
+  LOOKERSDK_BASE_URL: https://localhost:20000
+  LOOKERSDK_VERIFY_SSL: false
+  TS_JUNIT_OUTPUT_DIR: results/tssdk
+
+jobs:
+  unit:
+    name: Unit - ${{ matrix.os }} / Node ${{ matrix.node-version }}
+    env:
+      JEST_JUNIT_OUTPUT_DIR: results/tssdk
+      JEST_JUNIT_OUTPUT_NAME: ${{ matrix.os }}.tssdkrtl${{ matrix.node-version }}.xml
+    runs-on: ${{ matrix.os }}-latest
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu
+        node-version: [14.x, 16.x]
+
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.11.0
+        with:
+          access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Repo Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: |
+          yarn
+          yarn lint:es --quiet
+          yarn build
+          yarn dedupe:ci
+
+      - name: Mock looker.ini
+        run: |
+          echo "[Looker]" > looker.ini
+          echo "base_url=https://self-signed.looker.com:19999" >> looker.ini
+          echo "client_id=id" >> looker.ini
+          echo "client_secret=secret" >> looker.ini
+          echo "verify_ssl=False" >> looker.ini
+          echo "timeout=31" >> looker.ini
+          echo "[Looker31]" >> looker.ini
+          echo "base_url=https://self-signed.looker.com:19999" >> looker.ini
+          echo "verify_ssl=False" >> looker.ini
+          echo "timeout=30" >> looker.ini
+
+      # if this job fails before this point the required state check "Typescript Tests"
+      #  is never set, so we will set it manually.
+      - name: Report Failure
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/looker-open-source/sdk-codegen/check-runs \
+          --header "authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          --header "content-type: application/json" \
+          --header "Accept: application/vnd.github.v3+json" \
+          --data '{
+            "name": "Typescript Tests",
+            "head_sha": "${{ github.event.pull_request.head.sha || github.sha }}",
+            "conclusion": "failure"
+          }' \
+          --fail
+        if: failure()
+
+      - name: Run unit tests
+        run: yarn jest "packages/(extension-sdk|extension-sdk-react|sdk-rtl|sdk)/src" --reporters=default --reporters=jest-junit
+
+      - name: Delete looker.ini mock
+        run: rm looker.ini
+
+      - name: Upload ts unit test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: tssdk-test-results
+          path: results/tssdk
+
+  setup:
+    uses: looker-open-source/reusable-actions/.github/workflows/supported-versions.yml@main
+  integration:
+    needs: [unit,setup]
+    name: Integration - ${{ matrix.os }} / Node.${{ matrix.node-version }} / Looker.${{ matrix.looker }}
+    env:
+      JEST_JUNIT_OUTPUT_DIR: results/tssdk
+      JEST_JUNIT_OUTPUT_NAME: ${{ matrix.os }}.Node-${{ matrix.node-version }}.Looker-${{ matrix.looker }}.xml
+      LOOKERSDK_CLIENT_ID: ${{ secrets.LOOKERSDK_CLIENT_ID }}
+      LOOKERSDK_CLIENT_SECRET: ${{ secrets.LOOKERSDK_CLIENT_SECRET }}
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      matrix:
+        node-version: [16.x]
+        os:
+          - ubuntu
+        looker: ${{ fromJson(needs.setup.outputs.matrix_json) }}
+
+    steps:
+      - name: Repo Checkout
+        uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1.0.0
+        with:
+          credentials_json: ${{ secrets.GCP_AR_READER_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1.1.0
+
+      - name: Authenticate Artifact Repository
+        run: gcloud auth configure-docker us-west1-docker.pkg.dev --quiet
+
+      - name: Pull and run Looker docker image
+        # TODO: can we cache some layers of the image for faster download?
+        # we probably don't want to cache the final image for IP security...
+        run: |
+          docker pull --quiet us-west1-docker.pkg.dev/cloud-looker-sdk-codegen-cicd/looker/${{ matrix.looker }}
+          # set $LOOKER_OPTS to --no-ssl if we want to turn off ssl
+          docker run --name looker-sdk-codegen-ci -d -p 10000:9999 -p 20000:19999 us-west1-docker.pkg.dev/cloud-looker-sdk-codegen-cicd/looker/${{ matrix.looker }}
+          docker logs -f looker-sdk-codegen-ci --until=30s &
+
+      - name: Install Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: |
+          yarn
+          yarn build
+
+      - name: Check that Looker is ready
+        run: |
+          ${{ github.workspace }}/.github/scripts/wait_for_looker.sh
+
+      - name: Run Integration Tests
+        run: yarn jest packages/sdk-node/test --reporters=default --reporters=jest-junit
+
+      - name: Upload integration test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: tssdk-test-results
+          path: results/tssdk
+
+  publish-test-results:
+    needs: [unit, integration]
+    if: success() || failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v1.12
+        with:
+          # Cosmetic issue with `check_name` being associated to the wrong
+          # workflow: https://github.com/EnricoMi/publish-unit-test-result-action/issues/12
+          check_name: Typescript Tests
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          report_individual_runs: true
+          hide_comments: orphaned commits
+          check_run_annotations_branch: '*'
+          files: 'artifacts/tssdk-test-results/*.xml'
